@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Presupuesto ICARE 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f4f8; color:#222; }
+
+.header { background:linear-gradient(135deg,#1B3A6B 0%,#2563A8 100%);
+  color:white; padding:18px 28px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.header-left h1 { font-size:19px; font-weight:800; }
+.header-left p  { font-size:11px; opacity:.7; margin-top:3px; }
+.header-right   { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.status-dot     { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px; }
+.status-ok      { background:#27AE60; box-shadow:0 0 6px #27AE60; animation:pulse 2s infinite; }
+.status-err     { background:#E74C3C; }
+.status-loading { background:#F0A500; animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.status-text    { font-size:11px; opacity:.85; }
+.last-update    { font-size:10px; opacity:.6; }
+.btn-refresh    { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+  color:white; padding:6px 14px; border-radius:20px; cursor:pointer; font-size:11px;
+  font-weight:600; transition:all .2s; }
+.btn-refresh:hover { background:rgba(255,255,255,.25); }
+
+.main { display:grid; grid-template-columns:250px 1fr; min-height:calc(100vh - 68px); }
+
+.sidebar { background:#fff; border-right:1px solid #e0e8f0; padding:18px 14px; overflow-y:auto; }
+.sidebar-section { margin-bottom:22px; }
+.sidebar-title  { font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:1px; color:#8096AA; margin-bottom:9px; }
+
+.btn-ver { display:flex; align-items:center; gap:9px; width:100%; padding:11px 12px;
+  border:2px solid #e0e8f0; border-radius:10px; background:#fff; cursor:pointer;
+  font-size:12px; font-weight:600; color:#333; transition:all .2s; margin-bottom:7px; text-align:left; }
+.btn-ver:hover { border-color:#2563A8; background:#f0f6ff; }
+.btn-ver.active-neto { border-color:#2563A8; background:#e8f0fb; color:#1B3A6B; }
+.btn-ver.active-ing  { border-color:#27AE60; background:#e8f8ef; color:#1a7a4a; }
+.btn-ver.active-gas  { border-color:#C0392B; background:#fdecea; color:#C0392B; }
+.btn-icon { width:30px; height:30px; border-radius:7px; display:flex;
+  align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+
+.chart-type-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.btn-chart { padding:9px 4px; border:2px solid #e0e8f0; border-radius:8px;
+  background:#fff; cursor:pointer; font-size:10px; font-weight:600; color:#555;
+  transition:all .2s; text-align:center; }
+.btn-chart:hover { border-color:#2563A8; background:#f0f6ff; }
+.btn-chart.active { border-color:#2563A8; background:#2563A8; color:#fff; }
+.btn-chart .ci { font-size:18px; display:block; margin-bottom:2px; }
+
+.filter-list { max-height:240px; overflow-y:auto; }
+.filter-item { display:flex; align-items:center; gap:7px; padding:4px 3px;
+  font-size:11px; color:#444; cursor:pointer; border-radius:5px; }
+.filter-item:hover { background:#f0f4f8; }
+.filter-item input { cursor:pointer; width:13px; height:13px; accent-color:#2563A8; }
+.btn-fa { font-size:10px; color:#2563A8; background:none; border:none;
+  cursor:pointer; text-decoration:underline; padding:0; margin-bottom:5px; }
+
+.content-area { overflow-y:auto; max-height:calc(100vh - 68px); }
+
+.kpi-bar { display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+  padding:14px 18px 0; }
+.kpi { background:#fff; border-radius:11px; padding:13px 16px;
+  border-left:4px solid #ccc; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.kpi.ing  { border-color:#27AE60; }
+.kpi.gas  { border-color:#C0392B; }
+.kpi.neto { border-color:#2563A8; }
+.kpi-label { font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.8px; color:#8096AA; margin-bottom:3px; }
+.kpi-value { font-size:20px; font-weight:800; }
+.kpi.ing  .kpi-value { color:#1a7a4a; }
+.kpi.gas  .kpi-value { color:#C0392B; }
+.kpi.neto .kpi-value { color:#1B3A6B; }
+.kpi-sub { font-size:9px; color:#999; margin-top:2px; }
+
+.content { padding:0 18px 18px; display:flex; flex-direction:column; gap:14px; }
+
+.chart-card { background:#fff; border-radius:13px; padding:18px 22px;
+  box-shadow:0 2px 8px rgba(0,0,0,.07); }
+.chart-title { font-size:13px; font-weight:700; color:#1B3A6B; margin-bottom:3px; }
+.chart-sub   { font-size:10px; color:#8096AA; margin-bottom:14px; }
+
+.table-card { background:#fff; border-radius:13px; padding:18px 22px;
+  box-shadow:0 2px 8px rgba(0,0,0,.07); overflow:auto; }
+table { width:100%; border-collapse:collapse; font-size:11px; }
+th { background:#1B3A6B; color:#fff; padding:8px 10px; text-align:left; white-space:nowrap; }
+th:not(:first-child):not(:nth-child(2)) { text-align:right; }
+tr.agr-row td { background:#2563A8; color:#fff; font-weight:700; padding:8px 10px; }
+tr.cc-row td  { padding:6px 10px; border-bottom:1px solid #f0f0f0; }
+tr.cc-row:nth-child(even) td { background:#f7faff; }
+tr.cc-row td:not(:first-child):not(:nth-child(2)) { text-align:right; font-variant-numeric:tabular-nums; }
+tr.total-row td { background:#1B3A6B; color:#fff; font-weight:700; padding:9px 10px; }
+tr.total-row td:not(:first-child) { text-align:right; }
+.pos { color:#1a7a4a; } .neg { color:#C0392B; }
+.pos-w { color:#7ee8a8; } .neg-w { color:#ffaaaa; }
+.tag-i { background:#e8f8ef; color:#1a7a4a; font-size:9px; font-weight:700;
+  padding:1px 6px; border-radius:20px; display:inline-block; }
+.tag-g { background:#fdecea; color:#C0392B; font-size:9px; font-weight:700;
+  padding:1px 6px; border-radius:20px; display:inline-block; }
+
+/* CONFIG PANEL */
+.config-banner { background:#fff9e6; border:1px solid #F0A500; border-radius:10px;
+  padding:14px 18px; margin:14px 18px 0; font-size:11px; color:#6b5000; }
+.config-banner.hidden { display:none; }
+.config-banner .config-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.config-banner input { flex:1; min-width:200px; padding:8px 12px; border:1px solid #F0A500;
+  border-radius:6px; font-size:12px; font-family:monospace; }
+.config-banner .btn-save { background:#F0A500; color:#fff; border:none; padding:8px 16px;
+  border-radius:6px; cursor:pointer; font-weight:700; font-size:11px; white-space:nowrap; }
+.config-banner .btn-save:hover { background:#d4910a; }
+.config-hint { font-size:10px; color:#8a6500; margin-top:7px; }
+
+.error-banner { background:#fdecea; border:1px solid #C0392B; border-radius:10px;
+  padding:12px 18px; margin:6px 18px 0; font-size:11px; color:#C0392B;
+  display:none; align-items:center; gap:10px; flex-wrap:wrap; }
+.error-banner .btn-cambiar { background:#C0392B; color:#fff; border:none; padding:6px 14px;
+  border-radius:6px; cursor:pointer; font-weight:700; font-size:11px; white-space:nowrap; margin-left:auto; }
+.error-banner .btn-cambiar:hover { background:#a93226; }
+
+.footer { text-align:center; font-size:9px; color:#aaa;
+  padding:8px; border-top:1px solid #e8edf2; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1>📊 Dashboard Presupuesto — ICARE 2026</h1>
+    <p>Ingresos y Gastos Operacionales por Centro de Costos · Actualización automática</p>
+  </div>
+  <div class="header-right">
+    <span><span class="status-dot status-loading" id="statusDot"></span>
+          <span class="status-text" id="statusText">Conectando...</span></span>
+    <span class="last-update" id="lastUpdate"></span>
+    <button class="btn-refresh" onclick="fetchData()">↺ Actualizar</button>
+  </div>
+</div>
+
+<!-- BANNER CONFIGURACIÓN -->
+<div class="config-banner" id="configBanner">
+  <div class="config-row">
+    <span>⚙️ <strong>Pega aquí el link o ID de tu Google Sheet:</strong></span>
+    <input type="text" id="sheetIdInput" placeholder="https://docs.google.com/spreadsheets/d/..." />
+    <button class="btn-save" onclick="saveSheetId()">Conectar</button>
+  </div>
+  <div class="config-hint">💡 Puedes pegar el link completo de Google Sheets o solo el ID. Recuerda que la planilla debe estar configurada como pública.</div>
+</div>
+
+<!-- BANNER ERROR -->
+<div class="error-banner" id="errorBanner">
+  <span id="errorMsg"></span>
+  <button class="btn-cambiar" onclick="mostrarConfig()">✏️ Cambiar link</button>
+</div>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">¿Qué quiero ver?</div>
+      <button class="btn-ver active-neto" id="btn-neto" onclick="setVista('neto')">
+        <span class="btn-icon" style="background:#e8f0fb">⚖️</span>
+        <div><div>Ingresos − Gastos</div><div style="font-size:9px;opacity:.6">Balance operacional</div></div>
+      </button>
+      <button class="btn-ver" id="btn-ing" onclick="setVista('ing')">
+        <span class="btn-icon" style="background:#e8f8ef">📈</span>
+        <div><div>Solo Ingresos</div><div style="font-size:9px;opacity:.6">Cuotas, congresos, estudios</div></div>
+      </button>
+      <button class="btn-ver" id="btn-gas" onclick="setVista('gas')">
+        <span class="btn-icon" style="background:#fdecea">📉</span>
+        <div><div>Solo Gastos</div><div style="font-size:9px;opacity:.6">Gastos operacionales</div></div>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Tipo de gráfico</div>
+      <div class="chart-type-grid">
+        <button class="btn-chart active" id="ct-horizontal" onclick="setChartType('horizontal')">
+          <span class="ci">📉</span>Horizontal
+        </button>
+        <button class="btn-chart" id="ct-barras" onclick="setChartType('barras')">
+          <span class="ci">📊</span>Barras
+        </button>
+        <button class="btn-chart" id="ct-dona" onclick="setChartType('dona')">
+          <span class="ci">🍩</span>Dona
+        </button>
+        <button class="btn-chart" id="ct-linea" onclick="setChartType('linea')">
+          <span class="ci">📈</span>Línea
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Filtrar Agrupaciones</div>
+      <button class="btn-fa" onclick="toggleAll(true)">Todas</button>
+      <button class="btn-fa" onclick="toggleAll(false)" style="margin-left:6px">Ninguna</button>
+      <div class="filter-list" id="filterList"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Auto-actualización</div>
+      <select id="refreshInterval" onchange="setRefreshInterval()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:7px;font-size:11px;">
+        <option value="0">Manual (solo botón)</option>
+        <option value="30000">Cada 30 segundos</option>
+        <option value="60000" selected>Cada 1 minuto</option>
+        <option value="300000">Cada 5 minutos</option>
+        <option value="600000">Cada 10 minutos</option>
+      </select>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content-area">
+    <div class="kpi-bar">
+      <div class="kpi ing">
+        <div class="kpi-label">Total Ingresos Operacionales</div>
+        <div class="kpi-value" id="kpi-ing">—</div>
+        <div class="kpi-sub">Cuotas, Congresos, Estudios</div>
+      </div>
+      <div class="kpi gas">
+        <div class="kpi-label">Total Gastos Operacionales</div>
+        <div class="kpi-value" id="kpi-gas">—</div>
+        <div class="kpi-sub">Corporativos, Encuentros, Remuneraciones</div>
+      </div>
+      <div class="kpi neto">
+        <div class="kpi-label">Resultado Neto</div>
+        <div class="kpi-value" id="kpi-neto">—</div>
+        <div class="kpi-sub" id="kpi-sub">—</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="chart-card">
+        <div class="chart-title" id="chartTitle">Balance por Agrupación</div>
+        <div class="chart-sub" id="chartSub">Ingresos − Gastos por agrupación · $ CLP</div>
+        <canvas id="mainChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Detalle por Centro de Costos</div>
+        <div class="chart-sub" id="detailSub">Haz clic en una agrupación del gráfico superior para ver su desglose</div>
+        <canvas id="detailChart"></canvas>
+      </div>
+
+      <div class="table-card">
+        <div class="chart-title" style="margin-bottom:4px">Tabla Resumen Detallada</div>
+        <div class="chart-sub">Todas las agrupaciones y centros de costos con filtros aplicados</div>
+        <div id="tableContainer"></div>
+      </div>
+    </div>
+
+    <div class="footer">ICARE 2026 · Datos en tiempo real desde Google Sheets · Solo líneas operacionales (Ingresos / Gastos Oper.)</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN — SE GUARDA EN EL NAVEGADOR AUTOMÁTICAMENTE
+// ═══════════════════════════════════════════════════════════════
+const STORAGE_KEY = 'icare_sheet_id';
+const GID_HOJA1   = '0';        // gid de Hoja1 (pestaña principal)
+
+let sheetId       = localStorage.getItem(STORAGE_KEY) || '';
+let rawData       = [];
+let estructura    = {};
+let vista         = 'neto';
+let chartType     = 'horizontal';
+let selectedAgr   = null;
+let activeFilters = new Set();
+let mainChart     = null;
+let detailChart   = null;
+let refreshTimer  = null;
+
+// ═══════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN SHEET ID
+// ═══════════════════════════════════════════════════════════════
+function saveSheetId() {
+  const val = document.getElementById('sheetIdInput').value.trim();
+  if (!val) { alert('Por favor ingresa el link o ID de tu Google Sheet'); return; }
+  // Acepta ID directo o URL completa
+  let id = val;
+  const m = val.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) id = m[1];
+  sheetId = id;
+  localStorage.setItem(STORAGE_KEY, id);
+  document.getElementById('configBanner').classList.add('hidden');
+  hideError();
+  fetchData();
+}
+
+function checkConfig() {
+  if (!sheetId) {
+    mostrarConfig();
+    setStatus('warning', 'Configura tu Google Sheet para comenzar');
+  } else {
+    document.getElementById('configBanner').classList.add('hidden');
+    fetchData();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FETCH DATOS DESDE GOOGLE SHEETS (CSV público)
+// ═══════════════════════════════════════════════════════════════
+async function fetchData() {
+  if (!sheetId) return;
+  setStatus('loading', 'Actualizando datos...');
+  hideError();
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${GID_HOJA1}`;
+
+  try {
+    const resp = await fetch(url + '&t=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const csv  = await resp.text();
+    if (csv.includes('Sign in') || csv.length < 100) throw new Error('La planilla no es pública o el ID es incorrecto');
+
+    rawData = parseCSV(csv);
+    processData();
+    buildFilters();
+    render();
+    setStatus('ok', 'Conectado · Google Sheets');
+    document.getElementById('lastUpdate').textContent =
+      'Actualizado: ' + new Date().toLocaleTimeString('es-CL');
+  } catch(e) {
+    setStatus('error', 'Error de conexión');
+    showError('No se pudo conectar con Google Sheets. Verifica: 1) El ID es correcto, 2) La planilla es pública ("Cualquiera con el link").\nDetalle: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PARSE CSV
+// ═══════════════════════════════════════════════════════════════
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  // Buscar fila de encabezados (la que tiene "Línea Reporte")
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    if (lines[i].includes('Línea Reporte') || lines[i].includes('Linea Reporte') ||
+        lines[i].includes('DEBE') || lines[i].includes('SALDO CALC')) {
+      headerIdx = i; break;
+    }
+  }
+  const headers = parseLine(lines[headerIdx]).map(h => h.trim().replace(/^"|"$/g,''));
+  const rows = [];
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const vals = parseLine(lines[i]);
+    if (vals.every(v => !v || v === '""')) continue;
+    const obj = {};
+    headers.forEach((h,j) => { obj[h] = (vals[j]||'').replace(/^"|"$/g,'').trim(); });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseLine(line) {
+  const result = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROCESAR DATOS
+// ═══════════════════════════════════════════════════════════════
+function processData() {
+  estructura = {};
+
+  // Detectar nombres de columnas (tolerante a variaciones)
+  const sampleKeys = rawData.length > 0 ? Object.keys(rawData[0]) : [];
+  const findCol = (...opts) => sampleKeys.find(k => opts.some(o => k.toLowerCase().includes(o.toLowerCase()))) || '';
+
+  const COL_LINEA = findCol('Línea Reporte', 'Linea Reporte', 'línea reporte');
+  const COL_SALDO = findCol('SALDO CALC');
+  const COL_AGR   = findCol('Agrupación', 'Agrupacion');
+  const COL_CC    = findCol('Centro de Costo');
+
+  rawData.forEach(row => {
+    const linea = row[COL_LINEA] || '';
+    if (!linea.startsWith('Ingresos') && !linea.startsWith('Gastos Oper.')) return;
+
+    const tipo = linea.startsWith('Ingresos') ? 'ing' : 'gas';
+    const agr  = row[COL_AGR]  || 'Sin Agrupación';
+    const cc   = row[COL_CC]   || '(Sin asignar)';
+    const val  = parseFloat((row[COL_SALDO]||'0').replace(/[^0-9.\-]/g,'')) || 0;
+
+    if (!estructura[agr]) estructura[agr] = {};
+    if (!estructura[agr][cc]) estructura[agr][cc] = {ing:0, gas:0};
+    estructura[agr][cc][tipo] += val;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ESTADO / ERRORES
+// ═══════════════════════════════════════════════════════════════
+function setStatus(type, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + (type==='ok'?'status-ok':type==='loading'?'status-loading':'status-err');
+  txt.textContent = text;
+}
+function showError(msg) {
+  const b = document.getElementById('errorBanner');
+  document.getElementById('errorMsg').textContent = '⚠️ ' + msg;
+  b.style.display = 'flex';
+  // Mostrar también el banner de configuración para que pueda corregir el link
+  mostrarConfig();
+}
+function hideError() {
+  document.getElementById('errorBanner').style.display = 'none';
+}
+function mostrarConfig() {
+  const banner = document.getElementById('configBanner');
+  banner.classList.remove('hidden');
+  // Pre-llenar con el ID actual para que pueda editarlo fácilmente
+  const input = document.getElementById('sheetIdInput');
+  if (sheetId) input.value = sheetId;
+  input.focus();
+  input.select();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AUTO-REFRESH
+// ═══════════════════════════════════════════════════════════════
+function setRefreshInterval() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  const ms = parseInt(document.getElementById('refreshInterval').value);
+  if (ms > 0) refreshTimer = setInterval(fetchData, ms);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FILTROS
+// ═══════════════════════════════════════════════════════════════
+function buildFilters() {
+  const list = document.getElementById('filterList');
+  const prev = new Set(activeFilters);
+  activeFilters = new Set(Object.keys(estructura));
+  list.innerHTML = '';
+  Object.keys(estructura).forEach(agr => {
+    const checked = prev.size===0 || prev.has(agr);
+    if (!checked) activeFilters.delete(agr);
+    const div = document.createElement('div');
+    div.className = 'filter-item';
+    div.innerHTML = `<input type="checkbox" id="f_${CSS.escape(agr)}" ${checked?'checked':''} onchange="toggleFilter('${agr.replace(/'/g,"\\'")}')"><label for="f_${CSS.escape(agr)}">${agr}</label>`;
+    list.appendChild(div);
+  });
+}
+function toggleFilter(agr) {
+  if (activeFilters.has(agr)) activeFilters.delete(agr);
+  else activeFilters.add(agr);
+  render();
+}
+function toggleAll(state) {
+  if (state) activeFilters = new Set(Object.keys(estructura));
+  else       activeFilters.clear();
+  document.querySelectorAll('#filterList input').forEach(cb => cb.checked=state);
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VISTA / TIPO GRÁFICO
+// ═══════════════════════════════════════════════════════════════
+function setVista(v) {
+  vista = v;
+  ['ing','gas','neto'].forEach(x => {
+    document.getElementById('btn-'+x).className = 'btn-ver'+(x===v?' active-'+x:'');
+  });
+  render();
+}
+function setChartType(t) {
+  chartType = t;
+  document.querySelectorAll('.btn-chart').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ct-'+t).classList.add('active');
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+function fmt(v) {
+  const a = Math.abs(v);
+  if (a>=1e9) return (v<0?'-':'')+'$'+(a/1e9).toFixed(2)+' B';
+  if (a>=1e6) return (v<0?'-':'')+'$'+(a/1e6).toFixed(1)+' M';
+  if (a>=1e3) return (v<0?'-':'')+'$'+(a/1e3).toFixed(0)+' K';
+  return (v<0?'-':'')+'$'+a.toLocaleString('es-CL');
+}
+function fmtFull(v) { return (v<0?'-':'')+'$'+Math.abs(v).toLocaleString('es-CL'); }
+
+function getAgrTotals(agr) {
+  const ccs = estructura[agr]||{};
+  const ing = Object.values(ccs).reduce((s,v)=>s+v.ing,0);
+  const gas = Object.values(ccs).reduce((s,v)=>s+v.gas,0);
+  return {ing, gas, neto:ing+gas};
+}
+function getValue(agr) {
+  const t = getAgrTotals(agr);
+  return vista==='ing' ? t.ing : vista==='gas' ? Math.abs(t.gas) : t.neto;
+}
+
+const PAL_ING  = ['#27AE60','#2ECC71','#1abc9c','#16a085','#52BE80','#82E0AA','#48C9B0','#45B39D','#1A7A4A','#0E6655','#117A65','#0A3D2B','#148A70'];
+const PAL_GAS  = ['#C0392B','#E74C3C','#e55039','#d35400','#E67E22','#E59866','#CA6F1E','#BA4A00','#922B21','#7B241C','#A93226','#641E16','#CB4335'];
+const PAL_NETO = ['#2563A8','#1B3A6B','#3498DB','#2E86C1','#5DADE2','#85C1E9','#7FB3D3','#5499C9','#2471A3','#1F618D','#1A5276','#154360','#1C698F'];
+function pal(n) {
+  const p = vista==='ing'?PAL_ING:vista==='gas'?PAL_GAS:PAL_NETO;
+  return Array.from({length:n},(_,i)=>p[i%p.length]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  KPIs
+// ═══════════════════════════════════════════════════════════════
+function updateKPIs() {
+  let totIng=0, totGas=0;
+  [...activeFilters].forEach(agr=>{ const t=getAgrTotals(agr); totIng+=t.ing; totGas+=t.gas; });
+  const neto=totIng+totGas;
+  document.getElementById('kpi-ing').textContent  = fmt(totIng);
+  document.getElementById('kpi-gas').textContent  = fmt(Math.abs(totGas));
+  document.getElementById('kpi-neto').textContent = fmt(neto);
+  document.getElementById('kpi-sub').textContent  = neto>=0?'✅ Superávit operacional':'⚠️ Déficit operacional';
+  document.getElementById('kpi-neto').style.color = neto>=0?'#1a7a4a':'#C0392B';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GRÁFICO PRINCIPAL
+// ═══════════════════════════════════════════════════════════════
+function renderMainChart() {
+  const labels = [...activeFilters];
+  const values = labels.map(getValue);
+  const colors = vista==='neto' ? values.map(v=>v>=0?'#27AE60':'#C0392B') : pal(labels.length);
+
+  const titles = {
+    ing:  ['Ingresos por Agrupación','Solo líneas de Ingresos · $ CLP'],
+    gas:  ['Gastos por Agrupación','Solo líneas de Gastos Oper. · $ CLP'],
+    neto: ['Balance Operacional por Agrupación','Ingresos − Gastos · Verde=Superávit · Rojo=Déficit · $ CLP']
+  };
+  document.getElementById('chartTitle').textContent = titles[vista][0];
+  document.getElementById('chartSub').textContent   = titles[vista][1];
+
+  if (mainChart) { mainChart.destroy(); mainChart=null; }
+  const canvas = document.getElementById('mainChart');
+  canvas.height = chartType==='dona' ? 200 : Math.max(80, labels.length*(chartType==='horizontal'?28:20));
+  const ctx = canvas.getContext('2d');
+
+  if (chartType==='dona') {
+    mainChart = new Chart(ctx, { type:'doughnut', data:{
+      labels, datasets:[{data:values.map(Math.abs), backgroundColor:pal(labels.length), borderWidth:2, borderColor:'#fff'}]
+    }, options:{ responsive:true, plugins:{
+      legend:{position:'right',labels:{font:{size:10},padding:10}},
+      tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.parsed)}`}}
+    }, cutout:'55%' }});
+    return;
+  }
+
+  const isH = chartType==='horizontal';
+  const isL = chartType==='linea';
+  mainChart = new Chart(ctx, { type: isL?'line':'bar',
+    data:{ labels, datasets:[{
+      label: vista==='ing'?'Ingresos':vista==='gas'?'Gastos':'Neto',
+      data: values,
+      backgroundColor: isL?'rgba(37,99,168,0.12)':colors,
+      borderColor: isL?'#2563A8':colors,
+      borderWidth: isL?2.5:1, borderRadius: isL?0:5,
+      fill:isL, tension:.4,
+      pointBackgroundColor:'#2563A8', pointRadius: isL?4:0
+    }]},
+    options:{ indexAxis:isH?'y':'x', responsive:true,
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{label:c=>' '+fmtFull(c.parsed[isH?'x':'y'])}}},
+      scales:{
+        x:{ticks:{callback:isH?v=>fmt(v):undefined, font:{size:9},color:'#555'}, grid:{color:'#f0f0f0'}},
+        y:{ticks:{callback:!isH?v=>fmt(v):undefined, font:{size:10},color:'#333'}, grid:{color:'#f0f0f0'}}
+      },
+      onClick:(_,els)=>{ if(els.length){ selectedAgr=labels[els[0].index]; renderDetailChart(selectedAgr); }}
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GRÁFICO DETALLE
+// ═══════════════════════════════════════════════════════════════
+function renderDetailChart(agr) {
+  if (!agr) agr = [...activeFilters][0];
+  if (!agr || !estructura[agr]) return;
+  document.getElementById('detailSub').textContent =
+    `Desglose de "${agr}" · Clic en gráfico superior para cambiar`;
+
+  const ccs = Object.keys(estructura[agr]);
+  const vals = ccs.map(cc => {
+    const d = estructura[agr][cc];
+    return vista==='ing'?d.ing:vista==='gas'?Math.abs(d.gas):d.ing+d.gas;
+  });
+  const colors = vista==='neto'?vals.map(v=>v>=0?'#27AE60':'#C0392B'):pal(ccs.length);
+
+  if (detailChart) { detailChart.destroy(); detailChart=null; }
+  const canvas = document.getElementById('detailChart');
+  canvas.height = Math.max(60, ccs.length*26);
+  detailChart = new Chart(canvas.getContext('2d'), { type:'bar',
+    data:{ labels:ccs, datasets:[{label:agr, data:vals,
+      backgroundColor:colors, borderRadius:5, borderWidth:1, borderColor:colors}]},
+    options:{ indexAxis:'y', responsive:true,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>' '+fmtFull(c.parsed.x)}}},
+      scales:{
+        x:{ticks:{callback:v=>fmt(v),font:{size:9}}, grid:{color:'#f0f0f0'}},
+        y:{ticks:{font:{size:10},color:'#333'}, grid:{display:false}}
+      }}
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TABLA
+// ═══════════════════════════════════════════════════════════════
+function renderTable() {
+  let totIng=0, totGas=0;
+  let html=`<table><thead><tr>
+    <th>Agrupación</th><th>Centro de Costos</th>
+    <th style="text-align:right">Ingresos ($)</th>
+    <th style="text-align:right">Gastos ($)</th>
+    <th style="text-align:right">Neto ($)</th>
+  </tr></thead><tbody>`;
+
+  [...activeFilters].forEach(agr=>{
+    const t=getAgrTotals(agr); totIng+=t.ing; totGas+=t.gas;
+    html+=`<tr class="agr-row"><td>${agr}</td><td></td>
+      <td style="text-align:right">${fmtFull(t.ing)}</td>
+      <td style="text-align:right" class="neg-w">${fmtFull(t.gas)}</td>
+      <td style="text-align:right" class="${t.neto>=0?'pos-w':'neg-w'}">${fmtFull(t.neto)}</td></tr>`;
+    Object.entries(estructura[agr]).forEach(([cc,v])=>{
+      const n=v.ing+v.gas;
+      const tipo=v.ing>0?'<span class="tag-i">Ingreso</span>':'<span class="tag-g">Gasto</span>';
+      html+=`<tr class="cc-row"><td></td>
+        <td style="padding-left:24px">↳ ${cc} ${tipo}</td>
+        <td style="text-align:right" class="pos">${v.ing>0?fmtFull(v.ing):'—'}</td>
+        <td style="text-align:right" class="neg">${v.gas<0?fmtFull(v.gas):'—'}</td>
+        <td style="text-align:right" class="${n>=0?'pos':'neg'}">${fmtFull(n)}</td></tr>`;
+    });
+  });
+
+  const totNeto=totIng+totGas;
+  html+=`<tr class="total-row"><td colspan="2">TOTAL GENERAL</td>
+    <td>${fmtFull(totIng)}</td><td>${fmtFull(totGas)}</td>
+    <td class="${totNeto>=0?'pos-w':'neg-w'}">${fmtFull(totNeto)}</td>
+  </tr></tbody></table>`;
+  document.getElementById('tableContainer').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════
+function render() {
+  if (Object.keys(estructura).length===0) return;
+  updateKPIs();
+  renderMainChart();
+  renderDetailChart(selectedAgr||[...activeFilters][0]);
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+setRefreshInterval();
+checkConfig();
+</script>
+</body>
+</html>
